@@ -1,74 +1,62 @@
-import { Gender, type NewPatientEntry } from "./types.ts";
+import { z } from 'zod';
+import { Gender, HealthCheckRating } from './types.ts';
 
-const isString = (text: unknown): text is string => {
-  return typeof text === 'string' || text instanceof String;
-};
+// patients
+export const NewPatientSchema = z.object({
+  name: z.string(),
+  dateOfBirth: z.iso.date(),
+  ssn: z.string(),
+  gender: z.enum(Gender),
+  occupation: z.string(),
+});
 
-const parseName = (name: unknown): string => {
-  if (!name || !isString(name)) {
-    throw new Error('Incorrect or missing name: ' + name);
-  }
+export type NewPatientEntry = z.infer<typeof NewPatientSchema>;
 
-  return name;
-};
+// entries
+const BaseEntrySchema = z.object({
+  description: z.string(),
+  date: z.iso.date(),
+  specialist: z.string(),
+  diagnosisCodes: z.array(z.string()).optional(),
+});
 
-const parseSsn = (ssn: unknown): string => {
-  if (!ssn || !isString(ssn)) {
-    throw new Error('Incorrect or missing ssn: ' + ssn);
-  }
+const HealthCheckRatingSchema = z.union([
+  z.literal(HealthCheckRating.Healthy),
+  z.literal(HealthCheckRating.LowRisk),
+  z.literal(HealthCheckRating.HighRisk),
+  z.literal(HealthCheckRating.CriticalRisk),
+]);
 
-  return ssn;
-};
+const HealthCheckEntrySchema = BaseEntrySchema.extend({
+  type: z.literal("HealthCheck"),
+  healthCheckRating: HealthCheckRatingSchema,
+});
 
-const parseOccupation = (occupation: unknown): string => {
-  if (!occupation || !isString(occupation)) {
-    throw new Error('Incorrect or missing occupation: ' + occupation);
-  }
+const DischargeSchema = z.object({
+  date: z.iso.date(),
+  criteria: z.string(),
+});
 
-  return occupation;
-};
+const HospitalEntrySchema = BaseEntrySchema.extend({
+  type: z.literal("Hospital"),
+  discharge: DischargeSchema,
+});
 
-const isDate = (date: string): boolean => {
-  return Boolean(Date.parse(date));
-};
+const SickLeaveSchema = z.object({
+  startDate: z.iso.date(),
+  endDate: z.iso.date(),
+});
 
-const parseDateOfBirth = (date: unknown): string => {
-  if (!isString(date) || !isDate(date)){
-    throw new Error('Incorrect or missing dateOfBirth: ' + date);
-  }
+const OccupationalHealthcareEntrySchema = BaseEntrySchema.extend({
+  type: z.literal("OccupationalHealthcare"),
+  employerName: z.string(),
+  sickLeave: SickLeaveSchema.optional(),
+});
 
-  return date;
-};
+export const NewEntrySchema = z.discriminatedUnion("type", [
+  HealthCheckEntrySchema,
+  HospitalEntrySchema,
+  OccupationalHealthcareEntrySchema,
+]);
 
-const isGender = (param: string): param is Gender => {
-  return (Object.values(Gender) as string[]).includes(param);
-};
-
-const parseGender = (gender: unknown): Gender => {
-  if (!isString(gender) || !isGender(gender)) {
-    throw new Error('Incorrect or missing gender: ' + gender);
-  }
-  return gender;
-};
-
-const parseNewPatientEntry = (object: unknown): NewPatientEntry => {
-  if (!object || typeof object !== 'object') {
-    throw new Error('Incorrect or missing data');
-  }
-
-  if ('name' in object && 'dateOfBirth' in object && 'gender' in object && 'ssn' in object && 'occupation' in object) {
-    const newEntry: NewPatientEntry = {
-      name: parseName(object.name),
-      dateOfBirth: parseDateOfBirth(object.dateOfBirth),
-      gender: parseGender(object.gender),
-      ssn: parseSsn(object.ssn),
-      occupation: parseOccupation(object.occupation)
-    };
-
-    return newEntry;
-  }
-
-  throw new Error('Incorrect data: some fields are missing');
-};
-
-export default parseNewPatientEntry;
+export type NewEntry = z.infer<typeof NewEntrySchema>;
